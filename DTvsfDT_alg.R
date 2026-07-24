@@ -710,7 +710,7 @@ DT_Alg_Save <- function(obs_info){
     
   avg_margin_edges <- mean(margin_edges)
     
-  output_final <- list(trav_cost = dif_trav_cost, 
+  output_final <- list(trav_cost = total_trav_cost, 
                          rank_edges = ranking_list_edges, 
                          full_edge = seq_of_edges, 
                          avg_margin = avg_margin_edges)
@@ -907,7 +907,7 @@ fDT_Alg_Save <- function(obs_info,dt){
   
   avg_margin_edges <- mean(margin_edges)
   
-  output_final <- list(trav_cost = dif_trav_cost, 
+  output_final <- list(trav_cost = total_trav_cost, 
                        rank_edges = ranking_list_edges, 
                        full_edge = seq_of_edges, 
                        avg_margin = avg_margin_edges)
