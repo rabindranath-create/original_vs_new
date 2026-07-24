@@ -20,7 +20,7 @@ keep_margin <-c()
 
 
 
-for(ii in 1:100){
+for(ii in 1:20){
   
   obs_gen_para <- read.csv(paste0("pattern/rho_", rho, "_", ii, ".csv"))
   the_result <- fDT_Alg_Save(obs_gen_para, dt)
