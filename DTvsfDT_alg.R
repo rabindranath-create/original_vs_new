@@ -512,7 +512,7 @@ edit_distance <- function(A, B) {
 
 sim <- function(A, B) {
   dzz <- edit_distance(A, B)
-  1 - dzz / max(length(A), length(B))
+  return(1 - dzz / max(length(A), length(B)))
 }
 
 
@@ -544,43 +544,30 @@ G_original <- Graph_Discretized(x,y)
 #dt <- 25
 
 
-DT_vs_fDT_Alg <- function(obs_info, dt){
+DT_Alg_Save <- function(obs_info){
   output_Ginfo <- Update_graph_intersect_DT(G_original, x, y, obs_info, r)
-  output_Ginfo_dt <- Update_graph_intersect_DT_fixed(G_original, x, y, obs_info, r, dt)
   
   G_ed <- output_Ginfo$G_info
-  G_ed_dt <- output_Ginfo_dt$G_info
-  
   Int_info <- output_Ginfo$Int_info
-  Int_info_dt <- output_Ginfo_dt$Int_info_dt
   
   ##from to cost
   df_edge_ed <- as_data_frame(G_ed, what="edges")
-  df_edge_ed_dt <- as_data_frame(G_ed_dt, what="edges")
-  
   
   explored_node <- s
-  explored_node_dt <- s
-  
+
   #used for total traversal costs calculation 
   length_total <- 0 # record Euclidean length
   cost_total <- 0 # record disambiguation cost 
   
-  length_total_dt <- 0 # record Euclidean length
-  cost_total_dt <- 0 # record disambiguation cost 
-  
   #for traversal overall
   seq_of_edges <- c()
-  seq_of_edges_dt <- c()
   
   #for margin
   margin_edges <- c()
-  margin_edges_dt <- c()
-  
+   
   #Kendall(ranking edges each time, compute Knedall after finishing) 
   #indexed by nodes 
   ranking_list_edges <- list()
-  ranking_list_edges_dt <- list()
   #rankings_algo1[["q"]] <- is_boundary[order(edge_scores)]
   
   
@@ -589,7 +576,7 @@ DT_vs_fDT_Alg <- function(obs_info, dt){
   #while loop 
   ###############
   
-  while(!(explored_node != t | explored_node_dt != t)){
+  while(explored_node != t){
   
   ########
   #DT finding optimal action 
@@ -622,36 +609,6 @@ DT_vs_fDT_Alg <- function(obs_info, dt){
   
   #working
   
-  
-  #######
-  #fDT finding optimal action 
-  ########
-    is_boundary_dt <- which(df_edge_ed_dt[[1]] == explored_node_dt | df_edge_ed_dt[[2]] == explored_node_dt)
-    outside_vertex_dt <- ifelse(df_edge_ed_dt[[1]][is_boundary_dt] == is_boundary_dt, df_edge_ed_dt[[2]][is_boundary_dt], df_edge_ed_dt[[1]][is_boundary_dt])
-    
-    all_distances_to_t <- distances(
-      G_ed_dt, V(G_ed_dt),    # all nodes as source
-      which(vertex.attributes(G_ed_dt)$name==as.character(t)),
-      weights = df_edge_ed_dt$Cost,
-      algorithm = "dijkstra"
-    )
-    
-    edge_scores_dt <- df_edge_ed_dt$Cost[is_boundary_dt] + 
-      as.numeric(all_distances_to_t[ as.numeric(outside_vertex_dt) ])
-    
-    
-    action_edge_dt <- is_boundary_dt[which.min(edge_scores_dt)]
-    seq_of_edges_dt <- c(seq_of_edges_dt, action_edge_dt)
-    
-    sorted_scores_dt <- sort(edge_scores_dt)
-    margin_edges_dt <- c(margin_edges_dt, abs(sorted_scores_dt[2]- sorted_scores_dt[1]))
-    
-    #for lists for Kendall 
-    #indexed by nodes (in character)
-    ranking_list_edges_dt[[as.character(explored_node_dt)]] <- is_boundary_dt[order(edge_scores_dt)]
-  
-  ###########
-  ########
     
   
   ####  
@@ -740,128 +697,27 @@ DT_vs_fDT_Alg <- function(obs_info, dt){
     G_ed <- graph_from_data_frame(df_edge_ed,directed = FALSE)
   
   
-    
-    
-  ############
-  ##########fDT
-    #dismaibguated and others 
-  ############
-    obs_ind_temp <- which(Int_info_dt[action_edge_dt,]==1)
-    
-    if(length(obs_ind_temp) !=0){
-      if (length(obs_ind_temp)==1){
-        # add cost
-        cost_total_dt <- cost_total_dt+obs_info[obs_ind_temp,3]
-        
-        if(obs_info$status[obs_ind_temp]==1){
-          # adjust based on true obstalce
-          df_edge_ed_dt[which(Int_info_dt[,obs_ind_temp]==1),3] <- Inf
-          #ends here, current node kept and no length added 
-          
-        }else{
-          #false 
-          dt_nonfixed <- Dist_Euclidean(as.numeric(obs_info[obs_ind_temp,1:2]),c(50,1))
-          # adjust based on false obstacle
-          
-          #edges index which which(Int_info[,obs_ind_temp]==1) is true, corss the obsacle
-          df_edge_ed_dt[which(Int_info_dt[,obs_ind_temp]==1),3] <- pmax(0, df_edge_ed_dt[which(Int_info_dt[,obs_ind_temp]==1),3]-
-                                                                    0.5*(obs_info[obs_ind_temp,3]+(dt_nonfixed/(1-obs_info[obs_ind_temp,4]))^(-log(1-obs_info[obs_ind_temp,4]))))
-          Int_info_dt[which(Int_info_dt[,obs_ind_temp]==1),obs_ind_temp] <- 0 
-          
-          #adding the length
-          will_be_nex_node <- as.numeric(outside_vertex_dt[match(action_edge_dt, is_boundary_dt)])
-          
-          edge_length <- Dist_Euclidean(as.numeric(vertice_list[explored_node_dt, 1:2]),as.numeric(vertice_list[will_be_nex_node_dt,1:2]))
-          length_total_dt <- length_total_dt + edge_length
-          
-        }
-        
-      }else{
-        ##########
-        #multiple obstacle crossed 
-        ##########  
-        #keep the Euclidean distance, which is cloested 
-        dist_temp <- rep(0,length(obs_ind_temp_dt))
-        for(i in 1:length(obs_ind_temp_dt)){
-          dist_temp[i] <- Dist_Euclidean(as.numeric(vertice_list[as.numeric(df_edge_ed_dt[action_edge_dt, 1]), 1:2]),obs_info[obs_ind_temp_dt[i],1:2])
-        }
-        obs_ind_temp2 <- obs_ind_temp_dt[which.min(dist_temp)]
-        # add cost of disambiguation
-        cost_total_dt <- cost_total_dt+obs_info[obs_ind_temp2,3]
-        if (obs_info$status[obs_ind_temp2]==1){
-          # true obstacle
-          df_edge_ed_dt[which(Int_info_dt[,obs_ind_temp2]==1),3] <- Inf
-          #ends here, current node kept and no length added 
-          
-        } else{
-          dt_nonfixed <- Dist_Euclidean(as.numeric(obs_info[obs_ind_temp2,1:2]),c(50,1))
-          # false obstacle
-          df_edge_ed_dt[which(Int_info_dt[,obs_ind_temp2]==1),3] <- pmax(0, df_edge_ed_dt[which(Int_info_dt[,obs_ind_temp2]==1),3]-
-                                                                     0.5*(obs_info[obs_ind_temp2,3]+(dt_nonfixed/(1-obs_info[obs_ind_temp2,4]))^(-log(1-obs_info[obs_ind_temp2,4]))))
-          Int_info_dt[which(Int_info_dt[,obs_ind_temp2]==1),obs_ind_temp2] <- 0
-          
-          #adding the length
-          will_be_nex_node <- as.numeric(outside_vertex_dt[match(action_edge_dt, is_boundary_dt)])
-          
-          edge_length <- Dist_Euclidean(as.numeric(vertice_list[explored_node_dt, 1:2]),as.numeric(vertice_list[will_be_nex_node,1:2]))
-          length_total_dt <- length_total_dt + edge_length
-          
-        }
-        
-      }
-      
-    }else{
-      #does not cross any obstacles 
-      #add length 
-      will_be_nex_node <- as.numeric(outside_vertex_dt[match(action_edge_dt, is_boundary_dt)])
-      
-      #adding the length 
-      edge_length <- Dist_Euclidean(as.numeric(vertice_list[explored_node_dt, 1:2]),as.numeric(vertice_list[will_be_nex_node,1:2]))
-      length_total_dt <- length_total_dt + edge_length
-      #next 
-      
-      explored_node_dt <- will_be_nex_node
-    }
-    
-    G_ed_dt <- graph_from_data_frame(df_edge_ed_dt,directed = FALSE)
-    
   }
-  
+    
   
   ###############################
   #summarize the data for return 
   ###############################
   
-  #difference traversal cost
-  dif_trav_cost <- abs(length_total + cost_total - (length_total_dt + cost_total_dt)) / (length_total + cost_total)
+  total_trav_cost <- length_total + cost_total
   
-  #average margin difference 
+    
+    
   avg_margin_edges <- mean(margin_edges)
-  avg_margin_edges_dt <- mean(margin_edges_dt)
+    
+  output_final <- list(trav_cost = dif_trav_cost, 
+                         rank_edges = ranking_list_edges, 
+                         full_edge = seq_of_edges, 
+                         avg_margin = avg_margin_edges)
+    
+  return(output_final)   
+    
   
-  #Kendall 
-  shared_nodes <- intersect(names(ranking_list_edges), names(ranking_list_edges2))
-  
-  # compute kendall correlation for each shared node
-  kendall_scores <- sapply(shared_nodes, function(node) {
-    r1 <- ranking_list_edges[[node]]
-    r2 <- ranking_list_edges2[[node]]
-    cor(r1, r2, method = "kendall")
-  })
-  
-  # average across all shared nodes
-  avg_kendall <- mean(kendall_scores, na.rm = TRUE)
-  
-  traversal_compare_whole <- sim(seq_of_edges, seq_of_edges_dt)
-  
-  output_final <- list(trav_cost_dif = dif_trav_cost, 
-                       kendall = avg_kendall, 
-                       agreement = traversal_compare_whole, 
-                       margin = avg_margin_edges, 
-                       margin_dt = avg_margin_edges_dt)
-  
-  return(output_final) 
-
 }
 
 
@@ -873,305 +729,6 @@ DT_vs_fDT_Alg <- function(obs_info, dt){
 #end test
 ####################################
 ####################################
-
-
-
-
-
-
-
-#############
-#DT only for save
-###########
-
-DT_Alg_save <- function(obs_info){
-  
-  ##
-  #count when it disambiguate
-  ##
-  
-  
-  
-  output_Ginfo <- Update_graph_intersect_DT(G_original, x, y, obs_info, r)
-  
-  G_ed <- output_Ginfo$G_info
-  
-  Int_info <- output_Ginfo$Int_info
-  
-  ##from to cost
-  df_edge_ed <- as_data_frame(G_ed, what="edges")
-  n_rows <- nrow(df_edge_ed)
-  
-  list_of <- matrix(nrow = n_rows, ncol = 0)
-  
-  explored_node <- c(s)
-  
-
-  ##############
-  #Test before while loop 
-  ##############
-  
-  #############
-  #End
-  #############
-  
-  
-  
-  
-  #############
-  #while loop 
-  #############
-  
-  
-  while(!(t %in% explored_node)){
-    
-    df_edge_ed$Score <- Inf
-    
-    ########
-    #DT finding optimal action 
-    ########
-    
-    #####find which is boundary edge 
-    is_boundary <- (df_edge_ed$from %in% explored_node) != (df_edge_ed$to %in% explored_node)
-    df_edge_ed$outside_vertex <- NA_integer_
-    
-    #  vertex that is NOT in explored_node
-    df_edge_ed$outside_vertex[is_boundary] <- ifelse(
-      df_edge_ed$from[is_boundary] %in% explored_node,
-      df_edge_ed$to[is_boundary],   # from in explored_node → pick to
-      df_edge_ed$from[is_boundary]  # from not in explored_node → pick from
-    )
-    
-    boundary_edges <- which(!is.na(df_edge_ed$outside_vertex))
-    
-    all_distances_to_t <- distances(
-      G_ed, V(G_ed),    # all nodes as source
-      which(vertex.attributes(G_ed)$name==as.character(t)),
-      weights = df_edge_ed$Cost,
-      algorithm = "dijkstra"
-    )
-    
-    df_edge_ed$Score[boundary_edges] <-
-      as.numeric(all_distances_to_t[ as.numeric(df_edge_ed$outside_vertex[boundary_edges]) ]) +
-      df_edge_ed$Cost[boundary_edges]
-    
-    
-    action_edge <- which.min(df_edge_ed[,4])
-    
-    explored_node <- c(explored_node, df_edge_ed$outside_vertex[action_edge])
-    
-    ########
-    #END: DT finding optimal action 
-    ########
-    
-    #############################
-    
-    
-    obs_ind_temp <- which(Int_info[action_edge,]==1)
-    
-    if(length(obs_ind_temp) !=0){
-      if (length(obs_ind_temp)==1){
-        # 
-        if(obs_info$status[obs_ind_temp]==1){
-          # adjust based on true obstalce
-          df_edge_ed[which(Int_info[,obs_ind_temp]==1),3] <- Inf
-        } else{
-          dt_nonfixed <- Dist_Euclidean(as.numeric(obs_info[obs_ind_temp,1:2]),c(50,1))
-          # adjust based on false obstacle
-          df_edge_ed[which(Int_info[,obs_ind_temp]==1),3] <- pmax(0, df_edge_ed[which(Int_info[,obs_ind_temp]==1),3]-
-                                                                    0.5*(obs_info[obs_ind_temp,3]+(dt_nonfixed/(1-obs_info[obs_ind_temp,4]))^(-log(1-obs_info[obs_ind_temp,4]))))
-          Int_info[which(Int_info[,obs_ind_temp]==1),obs_ind_temp] <- 0 
-        }
-      } else{
-        dist_temp <- rep(0,length(obs_ind_temp))
-        for(i in 1:length(obs_ind_temp)){
-          dist_temp[i] <- Dist_Euclidean(as.numeric(vertice_list[as.numeric(df_edge_ed[action_edge, 1]), 1:2]),obs_info[obs_ind_temp[i],1:2])
-        }
-        obs_ind_temp2 <- obs_ind_temp[which.min(dist_temp)]
-        # add cost of disambiguation
-        
-        if (obs_info$status[obs_ind_temp2]==1){
-          # true obstacle
-          df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3] <- Inf
-        } else{
-          dt_nonfixed <- Dist_Euclidean(as.numeric(obs_info[obs_ind_temp2,1:2]),c(50,1))
-          # false obstacle
-          df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3] <- pmax(0, df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3]-
-                                                                     0.5*(obs_info[obs_ind_temp2,3]+(dt_nonfixed/(1-obs_info[obs_ind_temp2,4]))^(-log(1-obs_info[obs_ind_temp2,4]))))
-          Int_info[which(Int_info[,obs_ind_temp2]==1),obs_ind_temp2] <- 0
-        }
-      }
-    }
-    ###############################
-    
-    
-    
-    list_of <- cbind(list_of, df_edge_ed[, 4])
-  
-    
-    #######
-    #Whether the edge cross the boudary of the obstacle 
-    #######
-    
-    
-    
-    
-    #######
-    #End: Whether the edge cross the boudary of the obstacle 
-    #######
-    
-    
-  }
-  
-  return(list_of)
-}
-
-
-
-
-
-
-#############
-#fDT only for save
-###########
-
-fDT_Alg_save <- function(obs_info, dt){
-  
-  
-  output_Ginfo <- Update_graph_intersect_DT(G_original, x, y, obs_info, r)
-  
-  G_ed <- output_Ginfo$G_info
-  
-  Int_info <- output_Ginfo$Int_info
-  
-  ##from to cost
-  df_edge_ed <- as_data_frame(G_ed, what="edges")
-  n_rows <- nrow(df_edge_ed)
-  
-  list_of <- matrix(nrow = n_rows, ncol = 0)
-  
-  explored_node <- c(s)
-  
-  
-  ##############
-  #Test before while loop 
-  ##############
-  
-  #############
-  #End
-  #############
-  
-  
-  
-  
-  #############
-  #while loop 
-  #############
-  
-  
-  while(!(t %in% explored_node)){
-    
-    df_edge_ed$Score <- Inf
-    
-    ########
-    #DT finding optimal action 
-    ########
-    
-    #####find which is boundary edge 
-    is_boundary <- (df_edge_ed$from %in% explored_node) != (df_edge_ed$to %in% explored_node)
-    df_edge_ed$outside_vertex <- NA_integer_
-    
-    #  vertex that is NOT in explored_node
-    df_edge_ed$outside_vertex[is_boundary] <- ifelse(
-      df_edge_ed$from[is_boundary] %in% explored_node,
-      df_edge_ed$to[is_boundary],   # from in explored_node → pick to
-      df_edge_ed$from[is_boundary]  # from not in explored_node → pick from
-    )
-    
-    boundary_edges <- which(!is.na(df_edge_ed$outside_vertex))
-    
-    all_distances_to_t <- distances(
-      G_ed, V(G_ed),    # all nodes as source
-      which(vertex.attributes(G_ed)$name==as.character(t)),
-      weights = df_edge_ed$Cost,
-      algorithm = "dijkstra"
-    )
-    
-    df_edge_ed$Score[boundary_edges] <-
-      as.numeric(all_distances_to_t[ as.numeric(df_edge_ed$outside_vertex[boundary_edges]) ]) +
-      df_edge_ed$Cost[boundary_edges]
-    
-    
-    action_edge <- which.min(df_edge_ed[,4])
-    
-    explored_node <- c(explored_node, df_edge_ed$outside_vertex[action_edge])
-    
-    ########
-    #END: DT finding optimal action 
-    ########
-    
-    #############################
-    
-    
-    obs_ind_temp <- which(Int_info[action_edge,]==1)
-    
-    if(length(obs_ind_temp) !=0){
-      if (length(obs_ind_temp)==1){
-        # 
-        if(obs_info$status[obs_ind_temp]==1){
-          # adjust based on true obstalce
-          df_edge_ed[which(Int_info[,obs_ind_temp]==1),3] <- Inf
-        } else{
-          
-          # adjust based on false obstacle
-          df_edge_ed[which(Int_info[,obs_ind_temp]==1),3] <- pmax(0, df_edge_ed[which(Int_info[,obs_ind_temp]==1),3]-
-                                                                    0.5*(obs_info[obs_ind_temp,3]+(dt/(1-obs_info[obs_ind_temp,4]))^(-log(1-obs_info[obs_ind_temp,4]))))
-          Int_info[which(Int_info[,obs_ind_temp]==1),obs_ind_temp] <- 0 
-        }
-      } else{
-        dist_temp <- rep(0,length(obs_ind_temp))
-        for(i in 1:length(obs_ind_temp)){
-          dist_temp[i] <- Dist_Euclidean(as.numeric(vertice_list[as.numeric(df_edge_ed[action_edge, 1]), 1:2]),obs_info[obs_ind_temp[i],1:2])
-        }
-        obs_ind_temp2 <- obs_ind_temp[which.min(dist_temp)]
-        # add cost of disambiguation
-        
-        if (obs_info$status[obs_ind_temp2]==1){
-          # true obstacle
-          df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3] <- Inf
-        } else{
-          
-          # false obstacle
-          df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3] <- pmax(0, df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3]-
-                                                                     0.5*(obs_info[obs_ind_temp2,3]+(dt/(1-obs_info[obs_ind_temp2,4]))^(-log(1-obs_info[obs_ind_temp2,4]))))
-          Int_info[which(Int_info[,obs_ind_temp2]==1),obs_ind_temp2] <- 0
-        }
-      }
-    }
-    ###############################
-    
-    
-    
-    list_of <- cbind(list_of, df_edge_ed[, 4])
-    
-    
-    #######
-    #Whether the edge cross the boudary of the obstacle 
-    #######
-    
-    
-    
-    
-    #######
-    #End: Whether the edge cross the boudary of the obstacle 
-    #######
-    
-    
-  }
-  
-  return(list_of)
-}
-
 
 
 
