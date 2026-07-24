@@ -732,3 +732,190 @@ DT_Alg_Save <- function(obs_info){
 
 
 
+
+
+
+
+
+
+
+##################################
+#fDT SAve
+##################################
+
+fDT_Alg_Save <- function(obs_info,dt){
+  output_Ginfo <- Update_graph_intersect_DT_fixed(G_original, x, y, obs_info, r, dt)
+  
+  G_ed <- output_Ginfo$G_info
+  Int_info <- output_Ginfo$Int_info
+  
+  ##from to cost
+  df_edge_ed <- as_data_frame(G_ed, what="edges")
+  
+  explored_node <- s
+  
+  #used for total traversal costs calculation 
+  length_total <- 0 # record Euclidean length
+  cost_total <- 0 # record disambiguation cost 
+  
+  #for traversal overall
+  seq_of_edges <- c()
+  
+  #for margin
+  margin_edges <- c()
+  
+  #Kendall(ranking edges each time, compute Knedall after finishing) 
+  #indexed by nodes 
+  ranking_list_edges <- list()
+  #rankings_algo1[["q"]] <- is_boundary[order(edge_scores)]
+  
+  
+  
+  ############
+  #while loop 
+  ###############
+  
+  while(explored_node != t){
+    
+    ########
+    #DT finding optimal action 
+    ########
+    #DT 
+    is_boundary <- which(df_edge_ed[[1]] == explored_node | df_edge_ed[[2]] == explored_node)
+    outside_vertex <- ifelse(df_edge_ed[[1]][is_boundary] == explored_node, df_edge_ed[[2]][is_boundary], df_edge_ed[[1]][is_boundary])
+    
+    all_distances_to_t <- distances(
+      G_ed, V(G_ed),    # all nodes as source
+      which(vertex.attributes(G_ed)$name==as.character(t)),
+      weights = df_edge_ed$Cost,
+      algorithm = "dijkstra"
+    )
+    
+    edge_scores <- df_edge_ed$Cost[is_boundary] + 
+      as.numeric(all_distances_to_t[ as.numeric(outside_vertex) ])
+    
+    #edges used for traversal overall
+    action_edge <- is_boundary[which.min(edge_scores)]
+    seq_of_edges <- c(seq_of_edges, action_edge)
+    
+    #for margin
+    sorted_scores <- sort(edge_scores)
+    margin_edges <- c(margin_edges, abs(sorted_scores[2]- sorted_scores[1]))
+    
+    #for lists for Kendall 
+    #indexed by nodes (in character)
+    ranking_list_edges[[as.character(explored_node)]] <- is_boundary[order(edge_scores)]
+    
+    #working
+    
+    
+    
+    ####  
+    ####now the whether disambiguation 
+    ####  
+    #for DT
+    #######
+    obs_ind_temp <- which(Int_info[action_edge,]==1)
+    
+    if(length(obs_ind_temp) !=0){
+      if (length(obs_ind_temp)==1){
+        # add cost
+        cost_total <- cost_total+obs_info[obs_ind_temp,3]
+        
+        if(obs_info$status[obs_ind_temp]==1){
+          # adjust based on true obstalce
+          df_edge_ed[which(Int_info[,obs_ind_temp]==1),3] <- Inf
+          #ends here, current node kept and no length added 
+          
+        }else{
+          #false 
+          # adjust based on false obstacle
+          
+          #edges index which which(Int_info[,obs_ind_temp]==1) is true, corss the obsacle
+          df_edge_ed[which(Int_info[,obs_ind_temp]==1),3] <- pmax(0, df_edge_ed[which(Int_info[,obs_ind_temp]==1),3]-
+                                                                    0.5*(obs_info[obs_ind_temp,3]+(dt/(1-obs_info[obs_ind_temp,4]))^(-log(1-obs_info[obs_ind_temp,4]))))
+          Int_info[which(Int_info[,obs_ind_temp]==1),obs_ind_temp] <- 0 
+          
+          #adding the length
+          will_be_nex_node <- as.numeric(outside_vertex[match(action_edge, is_boundary)])
+          
+          edge_length <- Dist_Euclidean(as.numeric(vertice_list[explored_node, 1:2]),as.numeric(vertice_list[will_be_nex_node,1:2]))
+          length_total <- length_total + edge_length
+          
+        }
+        
+      }else{
+        ##########
+        #multiple obstacle crossed 
+        ##########  
+        #keep the Euclidean distance, which is cloested 
+        dist_temp <- rep(0,length(obs_ind_temp))
+        for(i in 1:length(obs_ind_temp)){
+          dist_temp[i] <- Dist_Euclidean(as.numeric(vertice_list[as.numeric(df_edge_ed[action_edge, 1]), 1:2]),obs_info[obs_ind_temp[i],1:2])
+        }
+        obs_ind_temp2 <- obs_ind_temp[which.min(dist_temp)]
+        # add cost of disambiguation
+        cost_total <- cost_total+obs_info[obs_ind_temp2,3]
+        if (obs_info$status[obs_ind_temp2]==1){
+          # true obstacle
+          df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3] <- Inf
+          #ends here, current node kept and no length added 
+          
+        } else{
+          # false obstacle
+          df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3] <- pmax(0, df_edge_ed[which(Int_info[,obs_ind_temp2]==1),3]-
+                                                                     0.5*(obs_info[obs_ind_temp2,3]+(dt/(1-obs_info[obs_ind_temp2,4]))^(-log(1-obs_info[obs_ind_temp2,4]))))
+          Int_info[which(Int_info[,obs_ind_temp2]==1),obs_ind_temp2] <- 0
+          
+          #adding the length
+          will_be_nex_node <- as.numeric(outside_vertex[match(action_edge, is_boundary)])
+          
+          edge_length <- Dist_Euclidean(as.numeric(vertice_list[explored_node, 1:2]),as.numeric(vertice_list[will_be_nex_node,1:2]))
+          length_total <- length_total + edge_length
+          
+        }
+        
+      }
+      
+    }else{
+      #does not cross any obstacles 
+      #add length 
+      
+      will_be_nex_node <- as.numeric(outside_vertex[match(action_edge, is_boundary)])
+      
+      #adding the length 
+      edge_length <- Dist_Euclidean(as.numeric(vertice_list[explored_node, 1:2]),as.numeric(vertice_list[will_be_nex_node,1:2]))
+      length_total <- length_total + edge_length
+      #next 
+      
+      explored_node <- will_be_nex_node
+    }
+    
+    G_ed <- graph_from_data_frame(df_edge_ed,directed = FALSE)
+    
+    
+  }
+  
+  
+  ###############################
+  #summarize the data for return 
+  ###############################
+  
+  total_trav_cost <- length_total + cost_total
+  
+  
+  
+  avg_margin_edges <- mean(margin_edges)
+  
+  output_final <- list(trav_cost = dif_trav_cost, 
+                       rank_edges = ranking_list_edges, 
+                       full_edge = seq_of_edges, 
+                       avg_margin = avg_margin_edges)
+  
+  return(output_final)   
+  
+  
+}
+
+
+
